@@ -4,9 +4,13 @@
 
 在桌面悬浮窗里看自己的实时工资，也可以和朋友一起看计薪、下班进度和心愿单。Windows 可以建房，手机用浏览器打开邀请链接即可加入。
 
-## 使用
+## 下载并使用
 
-1. 完整解压 Windows 便携包，打开 niuma.exe。
+**[下载 Windows x64 联机便携包](https://github.com/ArbalestL/niuma-together/releases/latest)**，在 Assets 中选择 `niuma-together-v1.1.0-windows-x64.zip`。包内已附 Node.js、Cloudflare 隧道工具和房间服务。
+
+安装本软件时选 Releases 里的便携包。GitHub 的「Code → Download ZIP」与 Releases 下的「Source code」是源码包。只复制 niuma.exe 可以单机计薪，想开房请保留完整解压目录。想从桌面启动，可以为解压后的 niuma.exe 创建快捷方式。
+
+1. 完整解压 Windows 便携包，打开解压目录里的 niuma.exe。
 2. 右键悬浮窗或托盘 →「联机房间」。填昵称后点「异地建房」或「本机建房」。
 3. 复制房间面板里的邀请链接。手机用浏览器打开，Windows 可把链接贴进「邀请链接或房间码」。
 
@@ -19,7 +23,7 @@
 - 工资金额默认关闭共享。心愿进度可单独展示，手机开启关页同步后可由房间服务计算到当地午夜。
 - 成员下班时，窗口会提醒「【用户名】下班了！拜拜了您」。
 
-## 从源码运行
+## 开发与源码编译
 
 用 Windows PowerShell 运行 build.ps1 编译桌面客户端。使用已有服务地址时，桌面端只需要 Windows 的 .NET Framework 4.8。
 
