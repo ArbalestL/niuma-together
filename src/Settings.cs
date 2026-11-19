@@ -28,6 +28,8 @@ namespace NiuMa
         public bool Topmost = true;
         public bool ClickThrough = false;
         public bool Mini = false;
+        public bool MiniOnlySelf = false;
+        public string RoomClientKey = "";
         public bool Masked = false;
         public bool Odometer = true;
         public bool Overtime = false;

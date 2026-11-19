@@ -16,6 +16,7 @@ namespace NiuMa
         public double PaidElapsed;     // 今日已计薪秒数
         public double OvertimeSeconds;
         public double SecondsToNext;   // 距离下一个节点（上班/下班/午休结束）
+        public double SecondsToOffWork;
         public double Progress;        // 0..1
     }
 
@@ -80,6 +81,7 @@ namespace NiuMa
                 return r;
             }
 
+            r.SecondsToOffWork = Math.Max(0, sc.E - t);
             r.PaidElapsed = PaidUntil(sc, t);
             r.Earned = rate * r.PaidElapsed;
             r.Progress = r.PaidSeconds > 0 ? r.PaidElapsed / r.PaidSeconds : 0;
@@ -165,6 +167,11 @@ namespace NiuMa
 
         public static string WishText(AppSettings s, Snapshot r)
         {
+            return WishText(s, r, true);
+        }
+
+        internal static string WishText(AppSettings s, Snapshot r, bool showMoney)
+        {
             var items = s.WishItems();
             if (items.Count == 0) return "";
             string best = null, next = null;
@@ -193,7 +200,9 @@ namespace NiuMa
                             return "再过 " + Duration(need, false) + "，" + next + "就赚回来了。";
                     }
                     if (best != null) return "今天已经赚到" + best + "了，稳住。";
-                    if (next != null) return "离" + next + "还差 " + s.Currency + (nextPrice - r.Earned).ToString("0.00") + "。";
+                    if (next != null) return showMoney
+                        ? "离" + next + "还差 " + s.Currency + (nextPrice - r.Earned).ToString("0.00") + "。"
+                        : "今天还在攒" + next + "。";
                     return "";
                 default:
                     return best != null ? "今天赚到了" + best + "，收工！" : "今天收工，辛苦了。";

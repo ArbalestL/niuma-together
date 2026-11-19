@@ -1,4 +1,4 @@
-﻿# 编译 牛马脱敏器.exe（只需要 Windows 自带的 .NET Framework 4.x，无需安装任何东西）
+# 编译 牛马脱敏器.exe（只需要 Windows 自带的 .NET Framework 4.x，无需安装任何东西）
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $fw = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
@@ -9,7 +9,8 @@ $out = Join-Path $root '牛马脱敏器.exe'
 $refs = @(
   "$wpf\PresentationFramework.dll", "$wpf\PresentationCore.dll", "$wpf\WindowsBase.dll",
   "$fw\System.Xaml.dll", "$fw\System.dll", "$fw\System.Core.dll",
-  "$fw\System.Drawing.dll", "$fw\System.Windows.Forms.dll"
+  "$fw\System.Drawing.dll", "$fw\System.Windows.Forms.dll",
+  "$fw\System.Net.Http.dll", "$fw\System.Web.Extensions.dll"
 ) | ForEach-Object { "/r:$_" }
 
 $srcs = Get-ChildItem (Join-Path $root 'src') -Filter *.cs | ForEach-Object { $_.FullName }

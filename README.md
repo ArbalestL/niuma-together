@@ -1,71 +1,39 @@
-<img width="924" height="1020" alt="image" src="https://github.com/user-attachments/assets/f4c85b4b-0717-4797-882d-52b963491031" /># 牛马脱敏器
+# NiuMa Together · 牛马脱敏器联机版
 
-一个 Windows 桌面悬浮窗小工具：实时显示你今天上班已经赚了多少钱，数字平滑滚动，精确到小数点后 5 位。
+基于 [feiyuaq/niuma](https://github.com/feiyuaq/niuma) v0.1.0 的 Windows 联机版。当前版本 v1.1.0，Windows 文件版本为 1.1.0.0。
 
-上班摸鱼时看一眼，每一秒都在到账。
+在桌面悬浮窗里看自己的实时工资，也可以和朋友一起看计薪、下班进度和心愿单。Windows 可以建房，手机用浏览器打开邀请链接即可加入。
 
+## 使用
 
-## 功能
+1. 完整解压 Windows 便携包，打开 niuma.exe。
+2. 右键悬浮窗或托盘 →「联机房间」。填昵称后点「异地建房」或「本机建房」。
+3. 复制房间面板里的邀请链接。手机用浏览器打开，Windows 可把链接贴进「邀请链接或房间码」。
 
-- **实时薪资**：按日薪或月薪、上下班时间计算今日已赚，数字平滑递增，无跳变
-- **状态显示**：还没上班 / 上班中 / 午休中 / 加班中 / 已下班 / 休息日，附下班倒计时
-- **工时进度条**、当前赚钱速度（每秒 / 每分钟）、时薪、本月累计、距离发薪日天数
-- **心愿单**：「今天已经赚到一件 T 恤了」，可自定义物品和价格
-- **毒鸡汤语录**：每 10 分钟轮换一条，可自定义
-- **原生悬浮窗**：可置顶、拖动、贴边吸附、托盘图标
-- **迷你模式**：双击窗口切换
-- **防窥**：一键隐藏金额，显示为 `****`
-- **鼠标穿透**：窗口不挡点击
-- **自适应分辨率**：窗口高度约占屏幕一半，1080p / 2K / 4K、任意系统缩放、多显示器都按当前屏幕自动适配
-- **可自定义**：软件名称、背景图片、背景 / 信息卡 / 整体透明度、界面大小、小数位数、货币符号、工作日、午休、加班倍率、发薪日、开机自启、上下班提醒
-- **临时调休**：右键菜单可把今天标记为请假或补班
+异地建房会在后台启动房间服务和 Cloudflare 临时隧道。房主可以把 Windows 程序隐藏到托盘。退出托管程序会结束房间，重启隧道会分配新的临时地址。已有公网 HTTPS 房间服务也可以直接填写地址。完整操作见[中文使用说明](使用说明.txt)。
 
-## 快捷键
+## 联机功能
 
-| 快捷键 | 作用 |
-| --- | --- |
-| `Ctrl + Alt + M` | 显示 / 隐藏窗口 |
-| `Ctrl + Alt + H` | 隐藏 / 显示金额 |
-| `Ctrl + Alt + T` | 开关鼠标穿透 |
-| 双击窗口 | 切换迷你模式 |
-| 右键窗口 | 打开菜单 |
+- 完整与迷你悬浮窗都可显示好友计数器。迷你模式单人五位小数，多人四位小数，并支持只显示自己。
+- 同一设备重复加入会恢复原成员，房主可在桌面和手机上移除成员。手机重新打开同一网址会尝试恢复有效的房间连接。
+- 工资金额默认关闭共享。心愿进度可单独展示，手机开启关页同步后可由房间服务计算到当地午夜。
+- 成员下班时，窗口会提醒「【用户名】下班了！拜拜了您」。
 
-## 下载使用
+## 从源码运行
 
-到 [Releases](../../releases) 页面下载 `牛马脱敏器.exe`，双击运行即可，无需安装。
-
-系统要求：Windows 10 / 11（自带 .NET Framework 4.8）。
-
-## 从源码编译
-
-不需要安装 Visual Studio，系统自带的 .NET Framework 编译器就够了。在项目目录打开 PowerShell，运行：
+用 Windows PowerShell 运行 build.ps1 编译桌面客户端。使用已有服务地址时，桌面端只需要 Windows 的 .NET Framework 4.8。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-编译完成后，项目目录下会生成 `牛马脱敏器.exe`。`beij.png` 和 `src\app.ico` 会被打包进 exe。
+如需从桌面程序一键建房，在程序同目录下的 runtime 放入便携版 [Node.js](https://nodejs.org/en/download) 的 node.exe 和 [Cloudflare 官方下载](https://developers.cloudflare.com/tunnel/downloads/)的 cloudflared.exe。这两个文件随便携包提供。
 
-## 项目结构
+房间服务和手机网页可独立运行。使用 Node.js 20 或更新版本，在仓库目录执行下列命令。本机页面默认在 `http://127.0.0.1:8080`。Docker 和 HTTPS 部署见[房间服务说明](room/README.md)。
 
-```
-├── build.ps1              编译脚本
-├── beij.png               默认背景图
-└── src
-    ├── App.cs             程序入口、单实例、通用 UI 工具
-    ├── Engine.cs          薪资与时间计算
-    ├── MainWindow.cs      悬浮窗主界面、托盘、快捷键
-    ├── Odometer.cs        滚轮翻牌数字控件
-    ├── Settings.cs        设置项的读写
-    ├── SettingsWindow.cs  设置窗口
-    ├── app.ico            图标
-    └── app.manifest       DPI 感知声明
+```sh
+node room/server.mjs
+node --test room/room.test.mjs
 ```
 
-## 设置文件
-
-设置保存在 `%APPDATA%\NiuMaTuoMinQi\settings.ini`。删除这个文件即可恢复默认设置。
-
-## 许可证
-
-[MIT](LICENSE)
+原始项目由 feiyuaq 发布，派生版沿用 [MIT 许可证](LICENSE)。

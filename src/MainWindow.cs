@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -20,7 +21,13 @@ namespace NiuMa
         FrameworkElement _full;
         TextBlock _title, _clock, _status, _countdown, _speed, _wish, _progressText, _hoursText,
                   _month, _monthSub, _hourly, _quote, _mask, _miniMask, _miniStatus;
-        Odometer _odo, _miniOdo;
+        Odometer _odo, _miniOdo, _miniGroupOdo;
+        TextBlock _miniGroupName, _miniGroupState, _miniGroupWish, _miniGroupMask;
+        StackPanel _miniStack, _miniSoloRow;
+        Grid _miniGroupRow;
+        RoomCounters _roomCounters, _miniRoomCounters;
+        readonly Stopwatch _roomClock = Stopwatch.StartNew();
+        readonly RoomDepartures _roomDepartures = new RoomDepartures();
         Button _eyeBtn, _pinBtn;
         ScaleTransform _scale = new ScaleTransform(1, 1);
         Forms.NotifyIcon _tray;
@@ -32,11 +39,14 @@ namespace NiuMa
         DateTime _quoteAt = DateTime.MinValue;
         DispatcherTimer _timer;
         SettingsWindow _settingsWin;
+        RoomWindow _roomWin;
+        internal RoomHost Host { get; private set; }
         bool _exiting;
         Snapshot _snap;
 
         public MainWindow(AppSettings s)
         {
+            Host = new RoomHost(AppDomain.CurrentDomain.BaseDirectory);
             _s = s;
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
@@ -44,6 +54,7 @@ namespace NiuMa
             ResizeMode = ResizeMode.NoResize;
             ShowInTaskbar = false;
             SizeToContent = SizeToContent.WidthAndHeight;
+            SizeChanged += (o, e) => { if (IsLoaded && _s.Mini) KeepOnScreen(); };
             UseLayoutRounding = true;
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Ideal);
             Icon = Ui.AppIconImage();
@@ -268,6 +279,8 @@ namespace NiuMa
             _wish = Ui.T("", 13, Ui.Ink);
             _wish.Margin = new Thickness(0, 0, 0, 12);
             card.Children.Add(_wish);
+            _roomCounters = new RoomCounters(false);
+            card.Children.Add(_roomCounters);
 
             var pg = new DockPanel();
             _progressText = Ui.T("", 12, Ui.Sub);
@@ -318,8 +331,8 @@ namespace NiuMa
             _miniDot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
             row.Children.Add(_miniDot);
             var host = new Grid();
-            _miniOdo = new Odometer(Ui.Num, 24, Ui.Carrot) { VerticalAlignment = VerticalAlignment.Center };
-            _miniMask = Ui.T("", 24, Ui.Carrot, FontWeights.Bold, Ui.Num);
+            _miniOdo = new Odometer(Ui.Num, 20, Ui.Carrot) { VerticalAlignment = VerticalAlignment.Center };
+            _miniMask = Ui.T("", 20, Ui.Carrot, FontWeights.Bold, Ui.Num);
             host.Children.Add(_miniOdo);
             host.Children.Add(_miniMask);
             row.Children.Add(host);
@@ -327,9 +340,30 @@ namespace NiuMa
             _miniStatus.VerticalAlignment = VerticalAlignment.Center;
             _miniStatus.Margin = new Thickness(10, 0, 0, 0);
             row.Children.Add(_miniStatus);
+            _miniStack = new StackPanel();
+            Grid.SetIsSharedSizeScope(_miniStack, true);
+            _miniSoloRow = row;
+            _miniStack.Children.Add(row);
+            var groupAmount = new Grid();
+            _miniGroupOdo = new Odometer(Ui.Num, RoomCounters.CompactFontSize, Ui.Carrot);
+            _miniGroupMask = Ui.T("", RoomCounters.CompactFontSize, Ui.Carrot, FontWeights.Bold, Ui.Num);
+            foreach (var item in new UIElement[] { _miniGroupOdo, _miniGroupMask })
+                groupAmount.Children.Add(new Viewbox
+                {
+                    Child = item, MaxWidth = 103, StretchDirection = StretchDirection.DownOnly,
+                    HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center
+                });
+            _miniGroupName = Ui.T("我", 11, Ui.Sub, FontWeights.SemiBold);
+            _miniGroupState = Ui.T("", 11, Ui.Sub);
+            _miniGroupWish = Ui.T("", 11, Ui.Leaf);
+            _miniGroupRow = RoomCounters.CompactRow(_miniGroupName, _miniGroupState, _miniGroupWish, groupAmount);
+            _miniGroupRow.Visibility = Visibility.Collapsed;
+            _miniStack.Children.Add(_miniGroupRow);
+            _miniRoomCounters = new RoomCounters(true);
+            _miniStack.Children.Add(_miniRoomCounters);
             _mini = new Border
             {
-                Child = row, Padding = new Thickness(14, 8, 14, 8), CornerRadius = new CornerRadius(15),
+                Child = _miniStack, Padding = new Thickness(14, 8, 14, 8), CornerRadius = new CornerRadius(15),
                 ToolTip = "双击展开 · 右键菜单",
             };
             return _mini;
@@ -366,6 +400,19 @@ namespace NiuMa
                     _s.Save(); _lastState = null; Tick(true);
                 }));
                 cm.Items.Add(Item("复制今日战报", CopyReport));
+                cm.Items.Add(Item("联机房间…", OpenRoom));
+                if (_roomWin != null && _roomWin.HasRoom)
+                    cm.Items.Add(Item("复制房间邀请", async () => await CopyRoomInvite()));
+                var onlySelf = new MenuItem { Header = "迷你模式只显示自己", IsCheckable = true, IsChecked = _s.MiniOnlySelf };
+                onlySelf.Click += (a, b) =>
+                {
+                    _s.MiniOnlySelf = onlySelf.IsChecked;
+                    _miniRoomCounters.SetOptions(_s);
+                    UpdateMiniLayout();
+                    FitCounters();
+                    _s.Save();
+                };
+                cm.Items.Add(onlySelf);
                 cm.Items.Add(new Separator());
                 cm.Items.Add(Item("隐藏到托盘", HideToTray));
                 cm.Items.Add(Item("退出", ExitApp));
@@ -380,6 +427,9 @@ namespace NiuMa
             var m = new Forms.ContextMenuStrip();
             m.Items.Add("显示 / 隐藏", null, (o, e) => ToggleVisible());
             m.Items.Add("设置…", null, (o, e) => OpenSettings());
+            m.Items.Add("联机房间…", null, (o, e) => OpenRoom());
+            var copyInvite = m.Items.Add("复制房间邀请", null, async (o, e) => await CopyRoomInvite());
+            m.Opening += (o, e) => { copyInvite.Available = _roomWin != null && _roomWin.HasRoom; };
             m.Items.Add("鼠标穿透 开/关", null, (o, e) => ToggleClickThrough());
             m.Items.Add("复制今日战报", null, (o, e) => CopyReport());
             m.Items.Add("-");
@@ -390,12 +440,14 @@ namespace NiuMa
 
         public void ApplySettings(AppSettings s, bool save)
         {
+            if (string.IsNullOrEmpty(s.RoomClientKey)) s.RoomClientKey = _s.RoomClientKey;
             _s = s;
             var img = Ui.LoadBackground(_s.BgPath);
             _bgBrush = img == null ? null : new ImageBrush(img) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Bottom };
             _bg.Background = _bgBrush;
             _odo.Configure(_s.Currency, _s.Odometer);
             _miniOdo.Configure(_s.Currency, _s.Odometer);
+            _miniGroupOdo.Configure(_s.Currency, _s.Odometer);
             ApplyVisual(_s);
             if (IsLoaded) Native.SetExStyle(this, Native.WS_EX_TRANSPARENT, _s.ClickThrough);
             _lastState = null;
@@ -427,10 +479,17 @@ namespace NiuMa
         void ApplyMask()
         {
             bool m = _s.Masked;
+            if (_roomWin != null) _roomWin.SetMasked(m);
+            _roomCounters.SetOptions(_s);
+            _miniRoomCounters.SetOptions(_s);
+            UpdateMiniLayout();
             _odo.Visibility = m ? Visibility.Hidden : Visibility.Visible;
             _miniOdo.Visibility = m ? Visibility.Hidden : Visibility.Visible;
             _mask.Text = m ? _s.Currency + " ****.**" : "";
-            _miniMask.Text = _mask.Text;
+            _miniMask.Text = _s.Currency + " ****.*****";
+            _miniGroupMask.Text = _s.Currency + " ****.****";
+            _miniGroupOdo.Visibility = m ? Visibility.Collapsed : Visibility.Visible;
+            _miniGroupMask.Visibility = m ? Visibility.Visible : Visibility.Collapsed;
             _mask.Visibility = _miniMask.Visibility = m ? Visibility.Visible : Visibility.Collapsed;
             ((TextBlock)_eyeBtn.Content).Text = Glyph(m ? 0xED1A : 0xE7B3);
         }
@@ -441,8 +500,13 @@ namespace NiuMa
             var now = Now();
             var r = Engine.Compute(_s, now);
             _snap = r;
+            (_s.Mini ? _miniRoomCounters : _roomCounters).Render(_roomClock.Elapsed.TotalSeconds);
             if (_s.Masked) return;
-            if (_s.Mini) _miniOdo.SetValue(r.Earned, _s.Decimals, r.Speed);
+            if (_s.Mini)
+            {
+                if (_miniRoomCounters.ShowingMembers) _miniGroupOdo.SetValue(r.Earned, RoomCounters.CompactGroupDecimals, r.Speed);
+                else _miniOdo.SetValue(r.Earned, RoomCounters.CompactSoloDecimals, r.Speed);
+            }
             else
             {
                 _odo.SetValue(r.Earned, _s.Decimals, r.Speed);
@@ -475,10 +539,16 @@ namespace NiuMa
             }
             _status.Text = st; _status.Foreground = color; _countdown.Text = cd;
             _miniStatus.Text = mini; _miniDot.Background = color;
+            _miniGroupState.Text = st;
+            _miniGroupState.ToolTip = cd;
 
             int dec = Math.Max(2, Math.Min(6, _s.Decimals));
             _speed.Text = r.Speed > 0 ? "当前赚钱速度  " + c + r.Speed.ToString("F" + dec) + " / 秒  ·  " + c + (r.Speed * 60).ToString("F2") + " / 分钟" : "当前赚钱速度  " + c + "0 / 秒（暂停计薪）";
             _wish.Text = Engine.WishText(_s, r);
+            var miniWish = _s.Masked ? Engine.WishText(_s, r, false) : _wish.Text;
+            _miniGroupWish.Text = RoomCounters.ShortWish(miniWish);
+            _miniGroupWish.ToolTip = miniWish;
+            _miniGroupWish.Visibility = string.IsNullOrEmpty(_miniGroupWish.Text) ? Visibility.Collapsed : Visibility.Visible;
             _progressText.Text = "今日工时进度 " + (r.Progress * 100).ToString("F1") + "%";
             _hoursText.Text = (r.PaidElapsed / 3600).ToString("F2") + " / " + (r.PaidSeconds / 3600).ToString("F2") + " 小时";
             _barTrack.Visibility = r.State == WorkState.RestDay ? Visibility.Collapsed : Visibility.Visible;
@@ -494,13 +564,13 @@ namespace NiuMa
 
             if (_lastState.HasValue && _lastState != r.State && _s.OffWorkNotify)
             {
-                if (r.State == WorkState.AfterWork || (r.State == WorkState.Overtime && _lastState == WorkState.Working))
+                if ((_roomWin == null || !_roomWin.HasRoom) &&
+                    (r.State == WorkState.AfterWork || (r.State == WorkState.Overtime && _lastState == WorkState.Working)))
                     Notify("下班啦！", "今天赚到 " + c + r.Earned.ToString("F2") + "，牛马可以下线了。");
                 else if (r.State == WorkState.Working && _lastState == WorkState.BeforeWork)
                     Notify("开始计薪", "新的一天，钱开始到账了。");
             }
             _lastState = r.State;
-            if (_s.Masked) { _mask.Text = c + " ****.**"; _miniMask.Text = _mask.Text; }
             OnRender(null, null);
         }
 
@@ -580,6 +650,67 @@ namespace NiuMa
 
         public AppSettings Current { get { return _s; } }
 
+        void OpenRoom()
+        {
+            if (_roomWin == null)
+            {
+                _roomWin = new RoomWindow(this);
+                _roomWin.Closed += (o, e) => _roomWin = null;
+            }
+            _roomWin.Show();
+            if (_roomWin.WindowState == WindowState.Minimized) _roomWin.WindowState = WindowState.Normal;
+            _roomWin.Activate();
+        }
+
+        async Task CopyRoomInvite()
+        {
+            var room = _roomWin;
+            if (room == null || !room.HasRoom) return;
+            if (await room.CopyInvite()) Notify("联机房间", "已复制当前房间的邀请链接。");
+            else if (_roomWin == room && room.HasRoom) OpenRoom();
+        }
+
+        internal void ShowCounters() { ShowFromTray(); }
+
+        internal void UpdateRoomCounters(RoomMember[] members, string self)
+        {
+            var now = _roomClock.Elapsed.TotalSeconds;
+            var departures = _roomDepartures.Observe(members);
+            if (_s.OffWorkNotify && departures.Count > 0)
+                Notify("联机房间", string.Join(Environment.NewLine, departures));
+            foreach (var member in members)
+            {
+                if (member.id != self) continue;
+                _miniGroupName.Text = member.name;
+                _miniGroupName.ToolTip = member.name;
+                break;
+            }
+            if (self == null)
+            {
+                _miniGroupName.Text = "我";
+                _miniGroupName.ToolTip = null;
+            }
+            bool fullChanged = _roomCounters.Update(members, self, _s, now);
+            bool miniChanged = _miniRoomCounters.Update(members, self, _s, now);
+            if (miniChanged) UpdateMiniLayout();
+            if (fullChanged || miniChanged) FitCounters();
+        }
+
+        void UpdateMiniLayout()
+        {
+            bool group = _miniRoomCounters.ShowingMembers;
+            _miniSoloRow.Visibility = group ? Visibility.Collapsed : Visibility.Visible;
+            _miniGroupRow.Visibility = group ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        void FitCounters()
+        {
+            ApplyScale();
+            if (!IsLoaded) return;
+            UpdateLayout();
+            KeepOnScreen();
+        }
+
         void CopyReport()
         {
             var now = Now();
@@ -591,9 +722,12 @@ namespace NiuMa
             try { Clipboard.SetText(txt); Notify("战报已复制", "可以直接粘贴给同事了。"); } catch { }
         }
 
-        void ExitApp()
+        async void ExitApp()
         {
+            if (_exiting) return;
             _exiting = true;
+            if (_roomWin != null) await _roomWin.CloseForShutdown();
+            Host.Dispose();
             SavePosition();
             _tray.Visible = false;
             _tray.Dispose();

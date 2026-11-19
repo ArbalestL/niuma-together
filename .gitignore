@@ -1,0 +1,6 @@
+*.exe
+*.log
+*.zip
+/runtime/
+settings.ini
+node_modules/

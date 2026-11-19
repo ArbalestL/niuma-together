@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>下班房间 · 牛马脱敏器</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.mjs"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <span>牛马脱敏器</span>
+      <h1>下班房间</h1>
+    </header>
+    <section id="personal" class="personal" aria-label="我的计薪">
+      <div class="personal-top"><span>今日已赚</span><span id="personal-state">未设置班次</span></div>
+      <div id="personal-amount" class="personal-amount">—</div>
+      <div id="personal-progress" class="personal-progress" hidden>
+        <progress id="personal-bar" max="1" aria-label="我的工时进度"></progress>
+        <p id="personal-note"></p>
+      </div>
+      <div class="personal-actions">
+        <button id="open-config" type="button">设置</button>
+        <button id="compact" type="button" aria-pressed="false">精简显示</button>
+      </div>
+    </section>
+    <section id="lobby" class="panel">
+      <form id="entry">
+        <label>昵称<input id="name" required maxlength="24" autocomplete="nickname" placeholder="在房间里怎么称呼你？"></label>
+        <label>房间码<input id="code" maxlength="12" autocapitalize="characters" spellcheck="false" placeholder="粘贴好友发来的房间码"></label>
+        <div class="actions">
+          <button type="submit">加入房间</button>
+          <button id="create" class="secondary" type="button">创建房间</button>
+        </div>
+      </form>
+    </section>
+    <p id="status" role="status"></p>
+    <section id="room" hidden>
+      <div class="room-tools">
+        <div><span>房间码</span><strong id="room-code"></strong></div>
+        <button id="invite" class="secondary">复制邀请</button>
+        <button id="leave" class="quiet">退出房间</button>
+      </div>
+    </section>
+    <details id="config" class="panel">
+        <summary>我的班次与薪资</summary>
+        <form id="schedule">
+          <div class="pair">
+            <label>上班<input name="start" type="time" required></label>
+            <label>计划下班<input name="end" type="time" required></label>
+          </div>
+          <fieldset>
+            <legend>工作日</legend>
+            <div id="days" class="week"></div>
+          </fieldset>
+          <label class="check"><input name="lunch" type="checkbox">午休暂停计薪</label>
+          <div class="pair">
+            <label>午休开始<input name="lunchStart" type="time" required></label>
+            <label>午休结束<input name="lunchEnd" type="time" required></label>
+          </div>
+          <div class="pair">
+            <label>计薪方式<select name="salaryMode"><option value="daily">日薪</option><option value="monthly">月薪</option></select></label>
+            <label>薪资<input name="amount" type="number" min="0" max="100000000000" step="any" required></label>
+            <label id="month-days">月计薪天数<input name="monthDays" type="number" min="1" max="31" step="any" required></label>
+            <label>货币符号<input name="currency" maxlength="8"></label>
+          </div>
+          <label class="check"><input name="overtime" type="checkbox">下班后计加班工资</label>
+          <div class="pair">
+            <label>加班倍率<input name="overtimeRate" type="number" min="0" max="100" step="any" required></label>
+            <label>今天的班次<select name="overrideMode"><option value="normal">按工作日</option><option value="rest">今天休息</option><option value="work">今天补班</option></select></label>
+          </div>
+          <div class="pair">
+            <label>心愿物品<input name="wishItem" maxlength="48" placeholder="例如一杯奶茶"></label>
+            <label>目标金额<input name="wishPrice" type="number" min="0.01" max="100000000000" step="any"></label>
+          </div>
+          <button type="submit">保存并同步进度</button>
+        </form>
+    </details>
+    <section id="room-members" hidden>
+      <label id="share-control" class="check share">
+        <input id="share" type="checkbox" disabled aria-describedby="share-note">共享今日已赚
+      </label>
+      <p id="share-note" class="hint">连续公开的金额可能被用来推算计薪速度。</p>
+      <label class="check share">
+        <input id="background" type="checkbox" disabled aria-describedby="background-note">关页后继续同步
+      </label>
+      <p id="background-note" class="hint">由房间服务估算到今天结束，离线后其他人也能看到你的计数。开启金额共享时，服务还会接收今日预计金额。</p>
+      <p id="background-status" class="hint" role="status"></p>
+      <h2>房间成员 <span id="count"></span></h2>
+      <div id="members"></div>
+    </section>
+  </main>
+  <div id="room-toasts" class="room-toasts" role="status" aria-live="polite"></div>
+</body>
+</html>
