@@ -1,10 +1,12 @@
 # 编译 牛马脱敏器.exe（只需要 Windows 自带的 .NET Framework 4.x，无需安装任何东西）
+param([string]$OutputPath)
+
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $fw = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
 if (-not (Test-Path "$fw\csc.exe")) { $fw = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319" }
 $wpf = "$fw\WPF"
-$out = Join-Path $root '牛马脱敏器.exe'
+$out = if ($OutputPath) { [IO.Path]::GetFullPath($OutputPath) } else { Join-Path $root '牛马脱敏器.exe' }
 
 $refs = @(
   "$wpf\PresentationFramework.dll", "$wpf\PresentationCore.dll", "$wpf\WindowsBase.dll",

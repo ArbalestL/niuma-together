@@ -6,7 +6,13 @@
 
 ## 下载并使用
 
-**[下载 Windows x64 联机便携包](https://github.com/ArbalestL/niuma-together/releases/latest)**，在 Assets 中选择 `niuma-together-v1.1.0-windows-x64.zip`。包内已附 Node.js、Cloudflare 隧道工具和房间服务。
+如果 [GitHub Releases](https://github.com/ArbalestL/niuma-together/releases) 已提供便携包，在 Assets 选择 `niuma-together-v1.1.0-windows-x64.zip`。包内已附 Node.js、Cloudflare 隧道工具和房间服务。
+
+如果只有源码，在仓库目录运行下列命令。脚本会下载并校验运行组件、编译客户端，并在 `dist\niuma-together-v1.1.0-windows-x64` 生成完整目录。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-portable.ps1
+```
 
 安装本软件时选 Releases 里的便携包。GitHub 的「Code → Download ZIP」与 Releases 下的「Source code」是源码包。只复制 niuma.exe 可以单机计薪，想开房请保留完整解压目录。想从桌面启动，可以为解压后的 niuma.exe 创建快捷方式。
 

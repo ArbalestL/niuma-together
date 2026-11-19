@@ -2,5 +2,6 @@
 *.log
 *.zip
 /runtime/
+/dist/
 settings.ini
 node_modules/
