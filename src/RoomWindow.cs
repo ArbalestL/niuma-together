@@ -32,7 +32,6 @@ namespace NiuMa
         readonly CheckBox _shareWish = new CheckBox { Content = "共享主程序的心愿进度", Margin = new Thickness(0, 4, 0, 8) };
         readonly ComboBox _targets = new ComboBox { Width = 205, DisplayMemberPath = "ManagementLabel", SelectedValuePath = "id", VerticalAlignment = VerticalAlignment.Center };
         readonly WrapPanel _hostTools = new WrapPanel { Visibility = Visibility.Collapsed };
-        readonly Button _leaveButton;
         RoomMember[] _choices = new RoomMember[0];
         readonly StackPanel _entry = new StackPanel();
         readonly DockPanel _room = new DockPanel { Visibility = Visibility.Collapsed };
@@ -40,9 +39,10 @@ namespace NiuMa
         Uri _server, _inviteBase;
         bool _publicHosted;
         RoomSession _session;
-        Task _leaveTask;
+        Task _lastLeaveRequest = Task.CompletedTask;
+        RoomSession _syncingSession;
         long _syncSequence;
-        bool _syncing, _pending, _closed, _shuttingDown;
+        bool _pending, _closed, _shuttingDown;
 
         public RoomWindow(MainWindow main)
         {
@@ -73,8 +73,8 @@ namespace NiuMa
             AddField("昵称", _name);
             AddField("邀请链接或房间码", _invite);
             var entryActions = new WrapPanel();
-            entryActions.Children.Add(Button("异地建房", async () => await CreateHosted(true)));
-            entryActions.Children.Add(Button("本机建房", async () => await CreateHosted(false)));
+            entryActions.Children.Add(Button("创建公网房间", async () => await CreateHosted(true)));
+            entryActions.Children.Add(Button("创建本地房间", async () => await CreateHosted(false)));
             entryActions.Children.Add(Button("加入房间", async () => await Enter(false)));
             entryActions.Children.Add(Button("在已有服务建房", async () => await Enter(true)));
             _entry.Children.Add(entryActions);
@@ -88,8 +88,7 @@ namespace NiuMa
             var actions = new WrapPanel();
             actions.Children.Add(Button("复制邀请", async () => await CopyInvite()));
             actions.Children.Add(Button("返回计数器", BackToCounters));
-            _leaveButton = Button("退出房间", async () => await Leave());
-            actions.Children.Add(_leaveButton);
+            actions.Children.Add(Button("退出房间", async () => await Leave()));
             roomControls.Children.Add(actions);
             _share.Margin = new Thickness(0, 6, 0, 4);
             _share.Checked += (o, e) => Refresh();
@@ -108,7 +107,7 @@ namespace NiuMa
             _hostTools.Children.Add(Button("移除成员", async () => await Kick()));
             roomControls.Children.Add(_hostTools);
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _timer.Tick += (o, e) => { if (!_syncing) Refresh(); };
+            _timer.Tick += (o, e) => { if (_syncingSession == null) Refresh(); };
             Closing += (o, e) =>
             {
                 if (_session == null || _shuttingDown) return;
@@ -269,8 +268,8 @@ namespace NiuMa
                 case "TRY_LATER": return "操作过于频繁，请稍后再试。";
                 case "MISSING_RUNTIME":
                 case "TUNNEL_MISSING_RUNTIME": return "运行组件不完整，请完整解压便携包后再打开 niuma.exe。";
-                case "TUNNEL_TIMEOUT": return "Cloudflare 多次申请超时。本机服务仍可用，可选择本机建房或稍后重试异地建房。";
-                case "TUNNEL_UNAVAILABLE": return "Cloudflare 暂时无法建立公网连接，可选择本机建房或稍后重试。";
+                case "TUNNEL_TIMEOUT": return "Cloudflare 多次申请超时。可以创建本地房间，或稍后重试创建公网房间。";
+                case "TUNNEL_UNAVAILABLE": return "Cloudflare 暂时无法建立公网连接。可以创建本地房间或稍后重试。";
                 case "LOCAL_TIMEOUT":
                 case "LOCAL_START_FAILED":
                 case "HOST_STOPPED": return "本机房间服务未能启动，请确认便携包已完整解压后重试。";
@@ -312,37 +311,33 @@ namespace NiuMa
             }
         }
 
-        async Task Leave()
+        Task Leave()
         {
             var active = _session;
-            if (active == null) return;
-            if (_leaveTask != null) { await _leaveTask; return; }
-            _leaveTask = LeaveCurrentRoom(active);
-            try { await _leaveTask; }
-            finally { _leaveTask = null; }
+            if (active == null) return _lastLeaveRequest;
+            var server = _server;
+            ReturnToEntry("已退出房间。");
+            _lastLeaveRequest = NotifyPreviousRoom(server, active.token);
+            return _lastLeaveRequest;
         }
 
-        async Task LeaveCurrentRoom(RoomSession active)
+        static async Task NotifyPreviousRoom(Uri server, string token)
         {
-            _leaveButton.IsEnabled = false;
-            _status.Text = "正在退出房间…";
             try
             {
-                await RoomApi.Send<object>(_server, "leave", new { }, active.token);
-                if (_session == active) ReturnToEntry("已退出房间。");
+                await RoomApi.Send<object>(server, "leave", new { }, token).ConfigureAwait(false);
             }
-            catch (Exception error)
+            catch
             {
-                if (_session != active) return;
-                if (error is RoomError && error.Message == "SESSION_EXPIRED") ReturnToEntry("已退出房间。");
-                else _status.Text = "尚未退出房间，请恢复网络后重试。";
+                // The local session has already ended. The server handles an unreachable client as offline.
             }
-            finally { _leaveButton.IsEnabled = true; }
         }
 
         void ReturnToEntry(string message)
         {
             _session = null;
+            _syncingSession = null;
+            _pending = false;
             UpdateInviteLink();
             _timer.Stop();
             _share.IsChecked = false;
@@ -413,14 +408,14 @@ namespace NiuMa
         async void Refresh()
         {
             var active = _session;
-            if (active == null || _closed || _leaveTask != null) return;
-            if (_syncing) { _pending = true; return; }
-            _syncing = true;
+            if (active == null || _closed) return;
+            if (_syncingSession == active) { _pending = true; return; }
+            _syncingSession = active;
             try
             {
                 var view = await RoomApi.Send<RoomView>(_server, "sync",
                     new { seq = ++_syncSequence, snapshot = GetSnapshot() }, active.token);
-                if (_session != active || _closed || _leaveTask != null) return;
+                if (_session != active || _closed) return;
                 _lastSync.Restart();
                 if (_status.Text == "连接中断，正在重连…") _status.Text = "";
                 _memberCount.Text = "房间成员 " + view.members.Length + " 人" + (view.host ? " · 你是房主" : "");
@@ -429,7 +424,7 @@ namespace NiuMa
             }
             catch (Exception error)
             {
-                if (_session != active || _closed || _leaveTask != null) return;
+                if (_session != active || _closed) return;
                 if (error is RoomError && error.Message == "SESSION_EXPIRED")
                     ReturnToEntry("已离开房间或连接已过期。");
                 else
@@ -441,8 +436,11 @@ namespace NiuMa
             }
             finally
             {
-                _syncing = false;
-                if (_pending) { _pending = false; Refresh(); }
+                if (_syncingSession == active)
+                {
+                    _syncingSession = null;
+                    if (_pending) { _pending = false; Refresh(); }
+                }
             }
         }
     }

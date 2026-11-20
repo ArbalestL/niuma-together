@@ -1,14 +1,14 @@
 # NiuMa Together · 牛马脱敏器联机版
 
-基于 [feiyuaq/niuma](https://github.com/feiyuaq/niuma) v0.1.0 的 Windows 联机版。当前版本 v1.1.0，Windows 文件版本为 1.1.0.0。
+基于 [feiyuaq/niuma](https://github.com/feiyuaq/niuma) v0.1.0 的 Windows 联机版。当前版本 v1.1.1，Windows 文件版本为 1.1.1.0。[更新日志](CHANGELOG.md)
 
 在桌面悬浮窗里看自己的实时工资，也可以和朋友一起看计薪、下班进度和心愿单。Windows 可以建房，手机用浏览器打开邀请链接即可加入。
 
 ## 下载并使用
 
-如果 [GitHub Releases](https://github.com/ArbalestL/niuma-together/releases) 已提供便携包，在 Assets 选择 `niuma-together-v1.1.0-windows-x64.zip`。包内已附 Node.js、Cloudflare 隧道工具和房间服务。
+在 [GitHub Releases](https://github.com/ArbalestL/niuma-together/releases/latest) 的 Assets 中选择 Windows x64 便携包。包内已附 Node.js、Cloudflare 隧道工具和房间服务。
 
-如果只有源码，在仓库目录运行下列命令。脚本会下载并校验运行组件、编译客户端，并在 `dist\niuma-together-v1.1.0-windows-x64` 生成完整目录。
+如果只有源码，在仓库目录运行下列命令。脚本会下载并校验运行组件、编译客户端，并在 `dist\niuma-together-v1.1.1-windows-x64` 生成完整目录。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build-portable.ps1
@@ -17,10 +17,10 @@ powershell -ExecutionPolicy Bypass -File .\build-portable.ps1
 安装本软件时选 Releases 里的便携包。GitHub 的「Code → Download ZIP」与 Releases 下的「Source code」是源码包。只复制 niuma.exe 可以单机计薪，想开房请保留完整解压目录。想从桌面启动，可以为解压后的 niuma.exe 创建快捷方式。
 
 1. 完整解压 Windows 便携包，打开解压目录里的 niuma.exe。
-2. 右键悬浮窗或托盘 →「联机房间」。填昵称后点「异地建房」或「本机建房」。
+2. 右键悬浮窗或托盘 →「联机房间」。填昵称后点「创建公网房间」或「创建本地房间」。
 3. 复制房间面板里的邀请链接。手机用浏览器打开，Windows 可把链接贴进「邀请链接或房间码」。
 
-异地建房会在后台启动房间服务和 Cloudflare 临时隧道。房主可以把 Windows 程序隐藏到托盘。退出托管程序会结束房间，重启隧道会分配新的临时地址。已有公网 HTTPS 房间服务也可以直接填写地址。完整操作见[中文使用说明](使用说明.txt)。
+创建公网房间会在后台启动房间服务和 Cloudflare 临时隧道。房主可以把 Windows 程序隐藏到托盘。退出托管程序会结束房间，重启隧道会分配新的临时地址。已有公网 HTTPS 房间服务也可以直接填写地址。完整操作见[中文使用说明](使用说明.txt)。
 
 ## 联机功能
 

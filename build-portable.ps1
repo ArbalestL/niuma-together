@@ -18,7 +18,7 @@ function Get-VerifiedFile($sources, $path, $sha) {
 }
 
 $root = (New-Item -ItemType Directory -Path $Destination -Force).FullName
-$final = Join-Path $root 'niuma-together-v1.1.0-windows-x64'
+$final = Join-Path $root 'niuma-together-v1.1.1-windows-x64'
 if (Test-Path -LiteralPath $final) { throw "Bundle already exists at $final" }
 $scratch = (New-Item -ItemType Directory -Path (Join-Path $root ('.build-' + [guid]::NewGuid().ToString('N')))).FullName
 try {
@@ -47,6 +47,7 @@ try {
     $files = @('launch.mjs', 'start-local.cmd', 'start-online.cmd') | ForEach-Object { Join-Path $PSScriptRoot $_ }
     Copy-Item -LiteralPath $files -Destination $bundle
     Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.txt' -File | Copy-Item -Destination $bundle
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'CHANGELOG.md') -Destination $bundle
     Copy-Item -LiteralPath @((Join-Path $PSScriptRoot 'room/server.mjs'), (Join-Path $PSScriptRoot 'room/public')) -Destination $room -Recurse
     & (Join-Path $PSScriptRoot 'build.ps1') -OutputPath (Join-Path $bundle 'niuma.exe')
 
