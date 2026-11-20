@@ -47,3 +47,7 @@ node --test room/room.test.mjs
 ```
 
 原始项目由 feiyuaq 发布，派生版沿用 [MIT 许可证](LICENSE)。
+
+## 发布新版本
+
+更新 Windows 产品版本和文件版本，在 CHANGELOG.md 加上同版本条目，最后把 .github/release-version.txt 改为对应的版本标签并推送到 main。GitHub Actions 会构建并测试 Windows 便携包，上传到草稿并校验 SHA-256，再发布 Release。带相同 ZIP 的已发布版本可以安全重跑。

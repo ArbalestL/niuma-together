@@ -18,7 +18,10 @@ function Get-VerifiedFile($sources, $path, $sha) {
 }
 
 $root = (New-Item -ItemType Directory -Path $Destination -Force).FullName
-$final = Join-Path $root 'niuma-together-v1.1.1-windows-x64'
+$assembly = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'src/App.cs'))
+$version = [regex]::Match($assembly, 'AssemblyInformationalVersion\("([0-9]+\.[0-9]+\.[0-9]+)"\)')
+if (!$version.Success) { throw 'No portable product version found in src/App.cs.' }
+$final = Join-Path $root ('niuma-together-v' + $version.Groups[1].Value + '-windows-x64')
 if (Test-Path -LiteralPath $final) { throw "Bundle already exists at $final" }
 $scratch = (New-Item -ItemType Directory -Path (Join-Path $root ('.build-' + [guid]::NewGuid().ToString('N')))).FullName
 try {

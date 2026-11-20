@@ -1,0 +1,36 @@
+name: Publish Windows portable release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/release-version.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-portable-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'ArbalestL/niuma-together' && github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Build and test portable ZIP
+        shell: pwsh
+        run: ./.github/scripts/release-portable.ps1 -Build
+      - name: Publish verified ZIP
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/release-portable.ps1 -Publish
