@@ -3,6 +3,51 @@ import { once } from 'node:events';
 import { test } from 'node:test';
 import { createRoomServer } from './server.mjs';
 import { backgroundPlan, compute, planWish, wishLine } from './public/pay.mjs';
+import { isMobileEntry, mobileEntry, readInvitation, roomInvitation } from './public/invite.mjs';
+
+test('fixed mobile invitations preserve room and tunnel and reject unrelated endpoints', () => {
+  const code = 'AFE012345678';
+  const server = 'https://test-tunnel.trycloudflare.com';
+  const link = new URL(roomInvitation(server, code));
+  assert.equal(isMobileEntry(link), true);
+  assert.deepEqual(readInvitation(link), { code, server });
+  assert.deepEqual(readInvitation(new URL(`${server}/#room=${code}`)), { code, server });
+  assert.equal(roomInvitation('http://127.0.0.1:8080', code), `http://127.0.0.1:8080/#room=${code}`);
+  for (const invalid of ['http://test-tunnel.trycloudflare.com', 'https://test.trycloudflare.com.example.org',
+    'https://api.trycloudflare.com', 'https://user@test.trycloudflare.com', 'https://test.trycloudflare.com:8080']) {
+    assert.equal(readInvitation(new URL(`#room=${code}&server=${encodeURIComponent(invalid)}`, mobileEntry)), null);
+  }
+});
+
+test('fixed mobile origin can join and sync with the room service', async t => {
+  const server = createRoomServer();
+  server.listen(0, '127.0.0.1');
+  t.after(() => server.close());
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}/api/v1/`;
+  const origin = new URL(mobileEntry).origin;
+  const preflight = (op, caller) => fetch(base + op, { method: 'OPTIONS', headers: {
+    Origin: caller, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'authorization,content-type'
+  }});
+  const allowed = await preflight('sync', origin);
+  assert.equal(allowed.status, 204);
+  assert.equal(allowed.headers.get('access-control-allow-origin'), origin);
+  assert.match(allowed.headers.get('access-control-allow-headers'), /Authorization/);
+  assert.equal((await preflight('sync', 'https://elsewhere.example')).headers.get('access-control-allow-origin'), null);
+  assert.equal((await preflight('create', origin)).headers.get('access-control-allow-origin'), null);
+  const send = (op, body, token) => fetch(base + op, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(op !== 'create' && { Origin: origin }),
+      ...(token && { Authorization: 'Bearer ' + token }) }, body: JSON.stringify(body) });
+  const host = await (await send('create', { name: '桌面' })).json();
+  const joined = await send('join', { name: '手机', code: host.code });
+  assert.equal(joined.status, 200);
+  assert.equal(joined.headers.get('access-control-allow-origin'), origin);
+  const phone = await joined.json();
+  const synced = await send('sync', { seq: 1, snapshot: null }, phone.token);
+  assert.equal(synced.status, 200);
+  assert.equal(synced.headers.get('access-control-allow-origin'), origin);
+  assert.equal((await synced.json()).members.length, 2);
+});
 
 test('two room members sync, hide earnings, disconnect, reconnect and leave', async (t) => {
   let now = 0;

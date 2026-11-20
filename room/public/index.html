@@ -4,8 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>下班房间 · 牛马脱敏器</title>
-  <link rel="stylesheet" href="/style.css">
-  <script type="module" src="/app.mjs"></script>
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://*.trycloudflare.com; base-uri 'none'; form-action 'none'">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.mjs"></script>
 </head>
 <body>
   <main>
@@ -28,7 +30,8 @@
     <section id="lobby" class="panel">
       <form id="entry">
         <label>昵称<input id="name" required maxlength="24" autocomplete="nickname" placeholder="在房间里怎么称呼你？"></label>
-        <label>房间码<input id="code" maxlength="12" autocapitalize="characters" spellcheck="false" placeholder="粘贴好友发来的房间码"></label>
+        <label id="code-field">房间码<input id="code" maxlength="12" autocapitalize="characters" spellcheck="false" placeholder="粘贴好友发来的房间码"></label>
+        <label id="link-field" hidden>邀请链接<input id="link" type="url" autocapitalize="off" spellcheck="false" placeholder="粘贴好友发来的完整邀请链接"></label>
         <div class="actions">
           <button type="submit">加入房间</button>
           <button id="create" class="secondary" type="button">创建房间</button>

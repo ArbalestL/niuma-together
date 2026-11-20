@@ -28,6 +28,9 @@ h2 span { color: var(--muted); font-size: .85rem; margin-left: .3rem; }
 .personal.compact { padding-block: .9rem; }
 .personal.compact .personal-progress { display: none; }
 .personal.compact .personal-amount { margin-bottom: .3rem; }
+.counter-readable { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.counter-digit { display: inline-block; width: 1ch; height: 1.2em; overflow: hidden; line-height: 1.2; vertical-align: bottom; text-align: center; }
+.counter-strip, .counter-strip span { display: block; }
 #config { margin: .9rem 0; }
 form { display: grid; gap: .9rem; }
 label { display: grid; gap: .4rem; font-size: .91rem; }

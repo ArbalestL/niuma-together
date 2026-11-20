@@ -4,15 +4,19 @@ import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { wishLine } from './public/pay.mjs';
+import { mobileEntry } from './public/invite.mjs';
 
 const onlineFor = 15_000;
+const mobileOrigin = new URL(mobileEntry).origin;
 const emptyFor = 30 * 60_000;
 const states = new Set(['RestDay', 'BeforeWork', 'Working', 'Lunch', 'AfterWork', 'Overtime']);
 const files = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
   ['/app.mjs', ['app.mjs', 'text/javascript; charset=utf-8']],
-  ['/pay.mjs', ['pay.mjs', 'text/javascript; charset=utf-8']]
+  ['/pay.mjs', ['pay.mjs', 'text/javascript; charset=utf-8']],
+  ['/invite.mjs', ['invite.mjs', 'text/javascript; charset=utf-8']],
+  ['/counter.mjs', ['counter.mjs', 'text/javascript; charset=utf-8']]
 ].map(([url, [file, type]]) => [url, [readFileSync(new URL('./public/' + file, import.meta.url)), type]]));
 
 const secret = (bytes) => randomBytes(bytes).toString('hex');
@@ -223,6 +227,21 @@ export function createRoomServer(clock = () => performance.now(), tls) {
         return;
       }
       const op = /^\/api\/v1\/(create|join|sync|leave|kick)$/.exec(url.pathname)?.[1];
+      if (op && op !== 'create') {
+        res.setHeader('Vary', 'Origin');
+        if (req.headers.origin === mobileOrigin) {
+          res.setHeader('Access-Control-Allow-Origin', mobileOrigin);
+          if (req.method === 'OPTIONS' && req.headers['access-control-request-method'] === 'POST') {
+            res.writeHead(204, {
+              'Access-Control-Allow-Methods': 'POST',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+              'Access-Control-Max-Age': '600'
+            });
+            res.end();
+            return;
+          }
+        }
+      }
       if (req.method !== 'POST' || !op) throw fail(404, 'NOT_FOUND');
       const data = await readBody(req);
       const now = clock();

@@ -14,6 +14,8 @@ namespace NiuMa
 {
     internal sealed class RoomWindow : Window
     {
+        const string MobileEntry = "https://arbalestl.github.io/niuma-together/";
+
         readonly MainWindow _main;
         readonly DispatcherTimer _timer;
         readonly TextBox _serverInput = new TextBox();
@@ -163,6 +165,21 @@ namespace NiuMa
                 (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
         }
 
+        static bool IsPublicTunnel(Uri uri)
+        {
+            return uri.Scheme == Uri.UriSchemeHttps && uri.IsDefaultPort && string.IsNullOrEmpty(uri.UserInfo) &&
+                Regex.IsMatch(uri.Host, @"\A(?!api\.)[a-z0-9-]+\.trycloudflare\.com\z", RegexOptions.IgnoreCase);
+        }
+
+        static string InviteField(Uri link, string field)
+        {
+            var fieldPrefix = field + "=";
+            foreach (var pair in link.Fragment.TrimStart('#').Split('&'))
+                if (pair.StartsWith(fieldPrefix, StringComparison.OrdinalIgnoreCase))
+                    return Uri.UnescapeDataString(pair.Substring(fieldPrefix.Length));
+            return "";
+        }
+
         async Task Enter(bool create)
         {
             var name = _name.Text.Trim();
@@ -173,7 +190,17 @@ namespace NiuMa
             if (!create && Uri.TryCreate(code, UriKind.Absolute, out link) && AllowedServer(link))
             {
                 address = link.GetLeftPart(UriPartial.Authority);
-                code = link.Fragment.StartsWith("#room=", StringComparison.OrdinalIgnoreCase) ? link.Fragment.Substring(6) : "";
+                code = InviteField(link, "room");
+                if (string.Equals(address + link.AbsolutePath.TrimEnd('/') + "/", MobileEntry, StringComparison.OrdinalIgnoreCase))
+                {
+                    Uri tunnel;
+                    if (!Uri.TryCreate(InviteField(link, "server"), UriKind.Absolute, out tunnel) || !IsPublicTunnel(tunnel))
+                    {
+                        _status.Text = "公网邀请链接无效，请重新复制完整链接。";
+                        return;
+                    }
+                    address = tunnel.GetLeftPart(UriPartial.Authority);
+                }
             }
             code = code.ToUpperInvariant();
             Uri server;
@@ -281,7 +308,15 @@ namespace NiuMa
 
         void UpdateInviteLink()
         {
-            _currentInvite.Text = _session == null ? "" : new Uri(_inviteBase, "/#room=" + _session.code).AbsoluteUri;
+            if (_session == null)
+            {
+                _currentInvite.Text = "";
+                return;
+            }
+            var room = "#room=" + _session.code;
+            _currentInvite.Text = IsPublicTunnel(_inviteBase)
+                ? MobileEntry + room + "&server=" + Uri.EscapeDataString(_inviteBase.GetLeftPart(UriPartial.Authority))
+                : new Uri(_inviteBase, "/" + room).AbsoluteUri;
         }
 
         internal async Task<bool> CopyInvite()

@@ -1,4 +1,6 @@
 import { backgroundPlan, compute, localDate, planWish, wishLine } from './pay.mjs';
+import { isMobileEntry, publicRoomServer, readInvitation, roomInvitation } from './invite.mjs';
+import { showAmount } from './counter.mjs';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('status');
@@ -14,6 +16,8 @@ const personalState = byId('personal-state');
 const personalProgress = byId('personal-progress');
 const personalBar = byId('personal-bar');
 const personalNote = byId('personal-note');
+const inviteInput = byId('link');
+const hosted = isMobileEntry(new URL(location.href));
 const defaults = {
   start: '10:00', end: '19:00', days: [1, 2, 3, 4, 5], lunch: false, lunchStart: '12:00', lunchEnd: '13:00',
   salaryMode: 'daily', amount: '', monthDays: 21.75, currency: '¥', overtime: false, overtimeRate: 1.5,
@@ -60,7 +64,15 @@ const weekday = ['日', '一', '二', '三', '四', '五', '六'].map((name, i) 
   return box;
 });
 
-const invitation = new URLSearchParams(location.hash.slice(1)).get('room')?.slice(0, 12).toUpperCase() ?? '';
+const invitation = new URLSearchParams(location.hash.slice(1)).get('room')?.toUpperCase() ?? '';
+const invitedRoom = hosted ? readInvitation(new URL(location.href)) : null;
+if (hosted) {
+  byId('code-field').hidden = byId('create').hidden = true;
+  byId('link-field').hidden = false;
+  inviteInput.required = true;
+  if (invitedRoom) inviteInput.value = roomInvitation(invitedRoom.server, invitedRoom.code);
+  else if (location.hash) status.textContent = '邀请链接无效，请粘贴完整的公网邀请链接。';
+}
 let profile = null;
 try { profile = JSON.parse(localStorage.getItem(profileKey)); } catch { /* 没有可恢复的昵称 */ }
 byId('name').value = profile?.name ?? '';
@@ -126,13 +138,16 @@ schedule.addEventListener('submit', (event) => {
   sync();
 });
 
-async function api(op, data, token) {
+async function api(server, op, data, token) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = 'Bearer ' + token;
-    const res = await fetch('/api/v1/' + op, { method: 'POST', headers, body: JSON.stringify(data), signal: controller.signal });
+    const res = await fetch(new URL('/api/v1/' + op, server), {
+      method: 'POST', headers, body: JSON.stringify(data), signal: controller.signal,
+      credentials: 'omit', redirect: 'error'
+    });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error);
     return result;
@@ -145,8 +160,15 @@ async function enter(create) {
   if (leaving) return;
   if (!entry.reportValidity()) return;
   const name = byId('name').value.trim();
-  const code = byId('code').value.trim().toUpperCase();
-  if (!create && !/^[A-F0-9]{12}$/.test(code)) {
+  let room = { server: location.origin, code: byId('code').value.trim().toUpperCase() };
+  if (hosted) {
+    try { room = readInvitation(new URL(inviteInput.value.trim())); } catch { room = null; }
+    if (!room) {
+      status.textContent = '请粘贴完整的公网邀请链接。';
+      return;
+    }
+  }
+  if (!create && !/^[A-F0-9]{12}$/.test(room.code)) {
     status.textContent = '请输入好友发来的 12 位房间码。';
     return;
   }
@@ -154,18 +176,30 @@ async function enter(create) {
   buttons.forEach(button => { button.disabled = true; });
   status.textContent = '正在连接…';
   try {
-    const joined = await api(create ? 'create' : 'join', { name, code, clientKey });
+    let identity = clientKey;
+    if (hosted) {
+      const key = new TextEncoder().encode(clientKey + room.server);
+      const digest = await crypto.subtle.digest('SHA-256', key);
+      identity = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('');
+    }
+    const joined = await api(room.server, create ? 'create' : 'join', { name, code: room.code, clientKey: identity });
     rememberProfile(name, joined.code);
-    openRoom(joined);
+    openRoom(joined, room.server);
   } catch (error) {
-    status.textContent = errors[error.message] ?? '连接失败，请稍后再试。';
+    status.textContent = errors[error.message] ?? (hosted
+      ? '连接失败，请确认房主在线并已更新到支持固定入口的版本。' : '连接失败，请稍后再试。');
   } finally {
     buttons.forEach(button => { button.disabled = false; });
   }
 }
 
-function openRoom(joined, saved = null) {
-  session = { ...joined, seq: 0 };
+function openRoom(joined, server, saved = null) {
+  session = { ...joined, server, seq: 0 };
+  if (hosted) {
+    const link = roomInvitation(server, joined.code);
+    inviteInput.value = link;
+    if (location.href !== link) history.replaceState(null, '', link);
+  }
   connectedAt = performance.now();
   byId('lobby').hidden = true;
   byId('room').hidden = false;
@@ -186,10 +220,10 @@ function openRoom(joined, saved = null) {
 function rememberRoom(approved = backgroundConfirmed) {
   if (!session) return;
   try {
-    const { code, id, token } = session;
+    const { code, id, token, server } = session;
     const day = localDate(new Date());
     const data = JSON.stringify({
-      session: { code, id, token }, day, background: approved && background.checked && backgroundDay === day,
+      session: { code, id, token, server }, day, background: approved && background.checked && backgroundDay === day,
       money: share.checked
     });
     if (localStorage.getItem(sessionKey) !== data) localStorage.setItem(sessionKey, data);
@@ -217,13 +251,12 @@ background.addEventListener('change', () => {
   sync();
 });
 byId('invite').addEventListener('click', async () => {
-  const url = new URL('/', location.href);
-  url.hash = 'room=' + session.code;
+  const url = roomInvitation(session.server, session.code);
   try {
-    await navigator.clipboard.writeText(url.href);
+    await navigator.clipboard.writeText(url);
     status.textContent = '已复制邀请链接。';
   } catch {
-    window.prompt('复制邀请链接', url.href);
+    window.prompt('复制邀请链接', url);
   }
 });
 
@@ -243,6 +276,13 @@ function showLobby(message) {
   status.textContent = message;
 }
 
+if (hosted) window.addEventListener('hashchange', () => {
+  const next = readInvitation(new URL(location.href));
+  if (!next) return;
+  if (session && (session.server !== next.server || session.code !== next.code)) showLobby('');
+  inviteInput.value = roomInvitation(next.server, next.code);
+});
+
 byId('leave').addEventListener('click', async () => {
   if (leaving || !session) return;
   leaving = true;
@@ -250,7 +290,7 @@ byId('leave').addEventListener('click', async () => {
   byId('leave').disabled = true;
   status.textContent = '正在退出房间…';
   try {
-    await api('leave', {}, current.token);
+    await api(current.server, 'leave', {}, current.token);
     showLobby('已退出房间。');
   } catch (error) {
     if (error.message === 'SESSION_EXPIRED') showLobby('已退出房间。');
@@ -282,7 +322,7 @@ async function sync() {
     const plan = background.checked && config ? backgroundPlan(config, now, share.checked) : null;
     if (plan && goal) plan.goal = goal;
     current.seq = Math.max(current.seq + 1, now.getTime());
-    const { members, backgroundEnabled, host } = await api('sync',
+    const { members, backgroundEnabled, host } = await api(current.server, 'sync',
       { seq: current.seq, snapshot: getSnapshot(now, goal), plan }, current.token);
     if (session !== current || leaving) return;
     connectedAt = performance.now();
@@ -329,8 +369,13 @@ function progressText(data) {
 function renderPersonal() {
   if (!config) return;
   const current = compute(config, new Date());
-  const amount = config.currency + current.earned.toFixed(5);
-  if (personalAmount.textContent !== amount) personalAmount.textContent = amount;
+  const money = { currency: config.currency, earned: current.earned };
+  showAmount(personalAmount, money);
+  const ownAmount = byId('members').querySelector('[data-self] .amount');
+  if (ownAmount) {
+    ownAmount.classList.remove('empty');
+    showAmount(ownAmount, money);
+  }
   const label = states[current.state];
   if (personalState.textContent !== label) personalState.textContent = label;
   personalProgress.hidden = current.state === 'RestDay';
@@ -346,7 +391,7 @@ async function kick(id, button) {
   if (!active) return;
   button.disabled = true;
   try {
-    await api('kick', { id }, active.token);
+    await api(active.server, 'kick', { id }, active.token);
     if (session === active) sync();
   } catch {
     if (session === active) status.textContent = '未能移除成员，请确认仍是房主并重试。';
@@ -388,13 +433,12 @@ function render(members, host) {
       }
       memberStates.set(member.id, data.state);
     }
-    const money = self ? null : data?.money;
+    const money = self ? (config && { currency: config.currency, earned: compute(config, new Date()).earned }) : data?.money;
     const [header, amount, bar, note, wish, remove] = card.children;
     header.firstElementChild.textContent = member.name + (self ? '（我）' : '');
     const workState = states[data?.state] ?? '未设置班次';
     header.lastElementChild.textContent = member.background ? workState + ' · 后台' : member.online ? workState : '离线';
-    amount.textContent = money ? money.currency + money.earned.toFixed(5)
-      : self ? (data && share.checked ? '正在共享金额' : '金额未共享') : data ? '金额未共享' : '';
+    showAmount(amount, money, self ? '未设置薪资' : data ? '金额未共享' : '');
     amount.className = money ? 'amount' : 'amount empty';
     bar.hidden = !data || data.state === 'RestDay';
     bar.setAttribute('aria-label', '已计薪工时进度');
@@ -433,7 +477,10 @@ window.addEventListener('online', sync);
 
 try {
   const saved = JSON.parse(localStorage.getItem(sessionKey));
-  if (saved?.session.token && (!invitation || invitation === saved.session.code)) {
-    openRoom(saved.session, saved);
+  const savedServer = hosted ? publicRoomServer(saved?.session?.server) : location.origin;
+  const matches = hosted ? (!location.hash || (invitedRoom?.server === savedServer && invitedRoom.code === saved?.session?.code))
+    : (!invitation || invitation === saved?.session?.code);
+  if (saved?.session.token && savedServer && matches) {
+    openRoom(saved.session, savedServer, saved);
   }
 } catch { /* 无可恢复的房间 */ }
